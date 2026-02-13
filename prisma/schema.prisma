@@ -1,0 +1,53 @@
+generator client {
+    provider = "prisma-client-js"
+}
+
+datasource db {
+    provider = "postgresql"
+    url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  password  String
+  role      String   @default("RESELLER")
+  commissionRate Float?
+  currency  String   @default("USD")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  customers Customer[]
+  commissions Commission[]
+}
+
+model Customer {
+  id          String   @id @default(cuid())
+  companyName String
+  email       String
+  phone       String?
+  status      String   @default("LEAD")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  resellerId  String
+  reseller    User     @relation(fields: [resellerId], references: [id])
+  commissions Commission[]
+
+  @@index([resellerId])
+}
+
+model Commission {
+  id          String   @id @default(cuid())
+  amount      Float
+  status      String   @default("PENDING")
+  period      String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  resellerId  String
+  customerId  String?
+  reseller    User     @relation(fields: [resellerId], references: [id])
+  customer    Customer? @relation(fields: [customerId], references: [id])
+
+  @@index([resellerId])
+  @@index([status])
+}
