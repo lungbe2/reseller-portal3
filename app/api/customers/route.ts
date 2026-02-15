@@ -1,60 +1,96 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { authOptions } from '../auth/auth-options';
-import { createNotification } from '@/lib/notifications/notification-service';
-import { prisma } from '@/lib/db';
+import { prisma } from '@/lib/prisma';
+import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 
-export const dynamic = 'force-dynamic';
-
-export async function POST(req: NextRequest) {
+export async function POST(request: Request) {
   try {
+    // Check authentication
     const session = await getServerSession(authOptions);
-    
-    if (!session || (session.user as any)?.role !== 'RESELLER') {
+    if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const userId = (session.user as any)?.id;
-    const body = await req.json();
-    const { companyName, contactName, email, phone, address, city, country, websiteDomain, reviewPlatform, status } = body;
+    // Only resellers can create customers
+    if (session.user.role !== 'RESELLER') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
 
+    // Parse request body
+    const body = await request.json();
+    const { 
+      companyName, 
+      contactName, 
+      email, 
+      phone, 
+      address, 
+      city, 
+      country, 
+      websiteDomain 
+    } = body;
+
+    // Validate required fields
     if (!companyName || !contactName || !email) {
       return NextResponse.json(
-        { error: 'Missing required fields' },
+        { error: 'Company name, contact name, and email are required' },
         { status: 400 }
       );
     }
 
+    // Create customer
     const customer = await prisma.customer.create({
       data: {
         companyName,
         contactName,
         email,
-        phone: phone || null,
-        address: address || null,
-        city: city || null,
-        country: country || null,
-        websiteDomain: websiteDomain || null,
-        reviewPlatform: reviewPlatform || null,
-        status: status || 'LEAD',
-        resellerId: userId,
+        phone,
+        address,
+        city,
+        country,
+        websiteDomain,
+        status: 'LEAD',
+        resellerId: session.user.id,
       },
     });
 
-    // Send notification
-    await createNotification({
-      userId,
-      type: 'CUSTOMER_CREATED',
-      data: {
-        customerName: companyName,
-        customerId: customer.id,
-      },
-      locale: 'en',
-    });
-
-    return NextResponse.json({ customer }, { status: 201 });
+    return NextResponse.json(customer, { status: 201 });
   } catch (error) {
-    console.error('Create customer error:', error);
+    console.error('Error creating customer:', error);
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    );
+  }
+}
+
+export async function GET(request: Request) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Resellers see only their customers, admins see all
+    const where = session.user.role === 'RESELLER' 
+      ? { resellerId: session.user.id }
+      : {};
+
+    const customers = await prisma.customer.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      include: {
+        reseller: {
+          select: {
+            name: true,
+            email: true,
+          }
+        }
+      }
+    });
+
+    return NextResponse.json(customers);
+  } catch (error) {
+    console.error('Error fetching customers:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

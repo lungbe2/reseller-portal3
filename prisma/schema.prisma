@@ -8,30 +8,37 @@ datasource db {
 }
 
 model User {
-  id        String   @id @default(cuid())
-  name      String
-  email     String   @unique
-  password  String
-  role      String   @default("RESELLER")
+  id             String    @id @default(cuid())
+  name           String
+  email          String    @unique
+  password       String
+  role           String    @default("RESELLER")
   commissionRate Float?
-  currency  String   @default("USD")
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  customers Customer[]
-  commissions Commission[]
+  currency       Currency  @default(USD)
+  status         String    @default("ACTIVE")
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  
+  customers      Customer[]
+  commissions    Commission[]
 }
 
 model Customer {
-  id          String   @id @default(cuid())
-  companyName String
-  email       String
-  phone       String?
-  status      String   @default("LEAD")
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  resellerId  String
-  reseller    User     @relation(fields: [resellerId], references: [id])
-  commissions Commission[]
+  id            String   @id @default(cuid())
+  companyName   String
+  contactName   String?
+  email         String
+  phone         String?
+  address       String?
+  city          String?
+  country       String?
+  websiteDomain String?
+  status        String   @default("LEAD")
+  resellerId    String
+  reseller      User     @relation(fields: [resellerId], references: [id])
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  commissions   Commission[]
 
   @@index([resellerId])
 }
@@ -50,4 +57,10 @@ model Commission {
 
   @@index([resellerId])
   @@index([status])
+}
+
+enum Currency {
+  USD
+  EUR
+  ZAR
 }
